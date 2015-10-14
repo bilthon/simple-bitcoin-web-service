@@ -1,0 +1,15 @@
+extends layout
+
+block content
+    h1= title
+    if error
+        p Error: #{error}
+    form(id="login", method="POST", action="/login")
+        div
+            lable(for='username') User Name
+            input(type='text', name='username')
+        div
+            lable(for='password') Password
+            input(type='password', name='password')
+        div
+            input(type="submit", value="Log In")

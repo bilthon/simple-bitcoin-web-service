@@ -1,0 +1,23 @@
+extends layout
+
+block content
+    if username
+        script
+            | var user = '#{username}';
+        div( style='text-align:right')
+            a(href='/logout') Logout
+        p Welcome #{username}
+        br
+        br
+        if mnemonic
+            div
+                p Private backup key mnemonic: #{mnemonic}
+        if multisig_address
+            div
+                p Multisig address: #{multisig_address}
+    else
+        p No user
+        p
+            a(href='/login') Login
+        p
+            a(href='/signup') Signup
