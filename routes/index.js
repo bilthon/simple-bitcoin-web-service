@@ -18,13 +18,14 @@ router.get("/login", function (req, res) {
 
 router.post("/login", function (req, res) {
     users.authenticate(req.body.username, req.body.password, function (err, user) {
-        if (user) {
+        if (!err) {
             req.session.regenerate(function () {
                 req.session.user = user;
-                res.redirect('/');
+                res.render("welcome", user);
             });
         } else {
-            res.render('login', { error: 'Authentication failed, please check your  username and password.'} );
+            console.error('error: '+err);
+            res.render("login", { error: 'Authentication failed, please check your  username and password.'} );
         }
     });
 });
@@ -40,16 +41,11 @@ router.get("/signup", function (req, res) {
 router.post("/signup", users.userExist, function (req, res) {
     var password = req.body.password;
     var username = req.body.username;
-    users.createUser(username, password, function(err, userData){
-        if(userData.user){
+    users.createUser(username, password, function(err, user){
+        if(!err){
             req.session.regenerate(function(){
-                req.session.user = userData.user;
-
-                res.render("welcome", {
-                    username: userData.user.username, 
-                    multisig_address: userData.multisig_address,
-                    mnemonic: userData.mnemonic
-                });
+                req.session.user = user;
+                res.render("welcome", user);
             });
         }
     });

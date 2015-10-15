@@ -1,10 +1,10 @@
 var mongoose = require('mongoose');
 var pass = require('./pass');
-var Bip38 = require('bip38');
 var bitcore = require('bitcore');
 var connection = require('./db').connection;
 var serverEnv = require('./server-env');
 var Mnemonic = require('bitcore-mnemonic');
+var util = require('util');
 
 /* If the environment variable NODE_ENV is 'production' we use the livenet, in case it is 'debug' we use the testnet */
 var network = process.env.NODE_ENV == 'production' ? bitcore.Networks.livenet : bitcore.Networks.testnet;
@@ -15,85 +15,69 @@ var UserSchema = new mongoose.Schema({
     username: String,
     salt: String,               // Salt for the hashed password
     hashed_password: String,    // Hashed password
-    private_key: String,        // Encrypted user private key
-    public_key: String,         // Plaintext user public key
-    pk_salt: String,            // BIP 38 encryption uses the address as the salt
-    multisig_address: String    // The multisig address this user will use to receive funds
+    user_account: Number,       // The number of the user account 
+    wallet_count: Number        // The amount of wallets generated for this user
 });
 
 var User = connection.model('users', UserSchema);
 
-function createEncryptedPrivateKey(password, fn){
-    var privateKey = bitcore.PrivateKey.fromRandom(network);
-    var privateKeyWif = privateKey.toWIF();
-    var address = privateKey.toAddress().toString();
-    var bip38 = new Bip38(network_argument);
-    var encrypted = bip38.encrypt(privateKeyWif, password, address);
-    fn(privateKey, encrypted, address);
-}
-
-function decryptPrivateKey(username, password, fn){
-    var bip38 = new Bip38(network_argument);
-    User.findOne({
-        username : username
-    },
-
-    function (err, user){
-        if(user){
-            console.log('string to decrypt: '+user.pk);
-            var decrypted = bip38.decrypt(user.pk, password);
-            console.log('decrypted: '+decrypted);
-            return fn(undefined, {username: user.username, private_key: decrypted });
-        }else{
-            return fn(new Error('Invalid user'));
-        }
-    });
-}
-
 function createUser(username, password, fn){
     pass.hash(password, function (err, salt, hash) {
-        if (err) throw err;
-        createEncryptedPrivateKey(password, function(privateKey, encrypted, address){
-            var backupKey = createBackupKey();
-
-            var publicServerKey = serverEnv.secret_key.hdPublicKey.derive(1).publicKey;
-            var publicClientKey = new bitcore.PublicKey(privateKey);
-            var publicBackupKey = backupKey['public_key'];
+    if (err) throw err;
+        User.count({}, function(err, count){
+            if(err) new Error('Error while counting users');
 
             var promise = new User({
                 username: username,
                 salt: salt,
                 hashed_password: hash,
-                private_key: encrypted,         // Encrypted user private key
-                public_key: publicClientKey,    // Plaintext user public key
-                pk_salt: address,               // BIP 38 encryption uses the address as the salt
-                multisig_address: createMultisigAddress(publicServerKey, publicClientKey, publicBackupKey)
+                user_account: count,     // Using the user count as the account number
+                wallet_count: 0
             }).save();
             promise.onResolve(function(err, user){
-                onUserSaved(err, user, backupKey, fn);
-            })
+                onUserSaved(err, user, fn);
+            });
         });
     });
 }
 
-function onUserSaved(err, user, backupKey, fn){
+function onUserSaved(err, user, fn){
     if(err) throw err;
 
     /* User data object that will be used by the jade template engine to render stuff */
     var userData = {
-        user: user,
-        backup_private: backupKey['private_key'],
-        backup_public: backupKey['public_key'],
-        multisig_address: user.multisig_address,
-        mnemonic: backupKey.mnemonic
+        username: user.username,
+        address: createAddress(user)
     };
     fn(err, userData);
 }
 
-/*
-* Authenticate user
+/**
+ * Creates a fresh wallet for a given user.
+ * @param {Object} User object retrieved from the collection
+ * @param {Boolean} Whether to create an external (or internal) address
+ * @return {String} A fresh new address
+ */
+function createAddress(user, external){
+    var change = 0;
+    if(external != undefined && external == true)
+        change = 1;
+
+    var address = serverEnv.secret_key
+        .derive(util.format("m/44'/0'/%d'/%d/%d", user.user_account, change, user.wallet_count))
+        .privateKey
+        .toAddress()
+        .toString();
+    return address;
+}
+
+/**
+* Authenticates user
+* @param {String} User name
+* @param {String} User password
+* @param {Function} Callback function
 */
-function authenticate(name, pass, fn) {
+function authenticate(name, password, fn) {
 
     User.findOne({
         username: name
@@ -102,9 +86,10 @@ function authenticate(name, pass, fn) {
     function (err, user) {
         if (user) {
             if (err) return fn(new Error('cannot find user'));
-            hash(pass, user.salt, function (err, hash) {
+            pass.hash(password, user.salt, function (err, hash) {
                 if (err) return fn(err);
-                if (hash == user.hash) return fn(null, user);
+                var userData = {username: user.username,address: createAddress(user)};
+                if (hash == user.hashed_password) return fn(null, userData);
                 fn(new Error('invalid password'));
             });
         } else {
@@ -143,11 +128,6 @@ function createBackupKey(){
     return {private_key: backupPrivate.toObject().privateKey, public_key: backupPublic, mnemonic: code.toString()};
 }
 
-function createMultisigAddress(serverKey, userKey, backupKey){
-    console.log(serverKey+', '+userKey+', '+backupKey);
-    return new bitcore.Address([serverKey, userKey, backupKey], 2, network);
-}
-
 module.exports = {
     createUser: createUser,
     authenticate: authenticate,
@@ -155,7 +135,4 @@ module.exports = {
     userExist: userExist,
     User: User,
     connection: connection,
-    decryptPrivateKey: decryptPrivateKey,
-    createBackupKey: createBackupKey,
-    createMultisigAddress: createMultisigAddress
 }

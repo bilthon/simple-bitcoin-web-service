@@ -9,12 +9,10 @@ block content
         p Welcome #{username}
         br
         br
-        if mnemonic
+        if address
             div
-                p Private backup key mnemonic: #{mnemonic}
-        if multisig_address
-            div
-                p Multisig address: #{multisig_address}
+                p Address: #{address}
+
     else
         p No user
         p
