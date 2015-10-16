@@ -45,7 +45,8 @@ function useCustomKey(){
     var sequence = readlineSync.question('Enter your private key mnemonic sequence: ');
     if(Mnemonic.isValid(sequence)){
         var code = new Mnemonic(sequence);
-        secret_key = code.toHDPrivateKey();
+        var network = process.env.NODE_ENV == 'debug' ? 'testnet' : 'livenet';
+        secret_key = code.toHDPrivateKey(undefined, network);
         module.exports.secret_key = secret_key;
     }else{
         console.error('Invalid mnemonic sequence');
@@ -57,7 +58,8 @@ function useCustomKey(){
 function useRandomKey(){
     var code = new Mnemonic();
     console.log('Using mnemonic sequence: '+code.toString());
-    secret_key = code.toHDPrivateKey(code);
+    var network = process.env.NODE_ENV == 'debug' ? 'testnet' : 'livenet';
+    secret_key = code.toHDPrivateKey(undefined, network);
     console.log('secret_key: '+secret_key);
     module.exports.secret_key = secret_key;
 }
