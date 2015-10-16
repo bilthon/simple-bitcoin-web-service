@@ -5,17 +5,21 @@ block content
         script
             | var user = '#{username}';
         div( style='text-align:right')
-            a(href='/logout') Logout
+            a(href='/user/logout') Logout
         p Welcome #{username}
         br
         br
         if address
             div
                 p Address: #{address}
+            div
+                form(name='refresh_address', action='/user/refresh_address', method='post')
+                    input(type='hidden', name='username', value='#{username}')
+                    input(type='submit', value='Refresh address')
 
     else
         p No user
         p
-            a(href='/login') Login
+            a(href='/user/login') Login
         p
-            a(href='/signup') Signup
+            a(href='/user/signup') Signup

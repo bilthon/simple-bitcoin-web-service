@@ -36,8 +36,17 @@ function createUser(username, password, fn){
             }).save();
             promise.onResolve(function(err, user){
                 onUserSaved(err, user, fn);
+                incrementWalletCount(user);
             });
         });
+    });
+}
+
+function incrementWalletCount(user, fn){
+    User.update({username: user.username}, {wallet_count: user.wallet_count + 1}, {multi: false}, function(err, raw){
+        if(err) console.error(err);
+        if(fn != undefined)
+            fn(err, raw);
     });
 }
 
@@ -63,8 +72,10 @@ function createAddress(user, external){
     if(external != undefined && external == true)
         change = 1;
 
+    var coin = process.env.NODE_ENV == 'production' ? 0 : 1;
+    console.log('Generating address with coin parameter: '+coin);
     var address = serverEnv.secret_key
-        .derive(util.format("m/44'/0'/%d'/%d/%d", user.user_account, change, user.wallet_count))
+        .derive(util.format("m/44'/%d'/%d'/%d/%d", coin, user.user_account, change, user.wallet_count))
         .privateKey
         .toAddress()
         .toString();
@@ -88,7 +99,7 @@ function authenticate(name, password, fn) {
             if (err) return fn(new Error('cannot find user'));
             pass.hash(password, user.salt, function (err, hash) {
                 if (err) return fn(err);
-                var userData = {username: user.username,address: createAddress(user)};
+                var userData = {username: user.username, address: createAddress(user)};
                 if (hash == user.hashed_password) return fn(null, userData);
                 fn(new Error('invalid password'));
             });
@@ -121,11 +132,16 @@ function userExist(req, res, next) {
     });
 }
 
-function createBackupKey(){
-    var code = new Mnemonic(Mnemonic.Words.SPANISH);
-    var backupPrivate = code.toHDPrivateKey().derive('m/44\'/0\'/0\'/0');
-    var backupPublic = backupPrivate.hdPublicKey.toObject().publicKey;
-    return {private_key: backupPrivate.toObject().privateKey, public_key: backupPublic, mnemonic: code.toString()};
+function refreshAddress(user, fn){
+    User.findOne({
+        username: user.username
+    }, function(err, user){
+        incrementWalletCount(user, function(err, raw){
+            if(err) console.error(err);
+            var userData = {username: user.username, address: createAddress(user)};
+            fn(err, userData);
+        });
+    });
 }
 
 module.exports = {
@@ -135,4 +151,5 @@ module.exports = {
     userExist: userExist,
     User: User,
     connection: connection,
+    refreshAddress: refreshAddress
 }

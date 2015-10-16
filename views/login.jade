@@ -4,7 +4,7 @@ block content
     h1= title
     if error
         p Error: #{error}
-    form(id="login", method="POST", action="/login")
+    form(id="login", method="POST", action="/user/login")
         div
             lable(for='username') User Name
             input(type='text', name='username')

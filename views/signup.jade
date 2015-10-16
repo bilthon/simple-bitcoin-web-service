@@ -6,7 +6,7 @@ block content
         var error = '#{error}';
     if error
         p Error: #{error}
-    form(id="signup", method="POST", action="/signup")
+    form(id="signup", method="POST", action="/user/signup")
         div
             label(for='username') User Name
             input(type='text', name='username')
