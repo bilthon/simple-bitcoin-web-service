@@ -13,6 +13,8 @@ block content
             div
                 p Address: #{address}
             div
+                p Balance: #{balance}
+            div
                 form(name='refresh_address', action='/user/refresh_address', method='post')
                     input(type='hidden', name='username', value='#{username}')
                     input(type='submit', value='Refresh address')

@@ -5,6 +5,7 @@ var connection = require('./db').connection;
 var serverEnv = require('./server-env');
 var Mnemonic = require('bitcore-mnemonic');
 var util = require('util');
+var Insight = require('bitcore-explorers').Insight;
 
 /* If the environment variable NODE_ENV is 'production' we use the livenet, in case it is 'debug' we use the testnet */
 var network = process.env.NODE_ENV == 'production' ? bitcore.Networks.livenet : bitcore.Networks.testnet;
@@ -51,7 +52,7 @@ function incrementWalletCount(user, fn){
 }
 
 function onUserSaved(err, user, fn){
-    if(err) throw err;
+    if(err) return fn(new Error('Error saving user'));
 
     /* User data object that will be used by the jade template engine to render stuff */
     var userData = {
@@ -73,7 +74,6 @@ function createAddress(user, external){
         change = 1;
 
     var coin = process.env.NODE_ENV == 'production' ? 0 : 1;
-    console.log('Generating address with coin parameter: '+coin);
     var address = serverEnv.secret_key
         .derive(util.format("m/44'/%d'/%d'/%d/%d", coin, user.user_account, change, user.wallet_count))
         .privateKey
@@ -99,12 +99,20 @@ function authenticate(name, password, fn) {
             if (err) return fn(new Error('cannot find user'));
             pass.hash(password, user.salt, function (err, hash) {
                 if (err) return fn(err);
-                var userData = {username: user.username, address: createAddress(user)};
-                if (hash == user.hashed_password) return fn(null, userData);
-                fn(new Error('invalid password'));
+                calculateBalance(user, function(err, balance){
+                    var userData = {
+                        username: user.username, 
+                        address: createAddress(user),
+                        balance: balance
+                    };
+                    if( hash == user.hashed_password)
+                        fn(null, userData)
+                    else
+                        fn(new Error('invalid password'));
+                })
             });
         } else {
-            return fn(new Error('cannot find user'));
+            fn(new Error('cannot find user'));
         }
     });
 
@@ -137,11 +145,45 @@ function refreshAddress(user, fn){
         username: user.username
     }, function(err, user){
         incrementWalletCount(user, function(err, raw){
-            if(err) console.error(err);
-            var userData = {username: user.username, address: createAddress(user)};
-            fn(err, userData);
+            if(err) return fn(err);
+
+            calculateBalance(user, function(err, balance){
+                var userData = {
+                    username: user.username, 
+                    address: createAddress(user),
+                    balance: String(balance)
+                };
+                fn(err, userData);
+            });
         });
     });
+}
+
+function calculateBalance(user, fn){
+    var addresses = getUsedAddresses(user);
+    var insight = new Insight(network);
+    insight.getUnspentUtxos(addresses, function(err, utxos){
+        var balance = 0;
+        for(var i in utxos){
+            if(utxos[i].toObject()['amount'] != undefined)
+                balance += utxos[i].toObject()['amount'];
+        }
+        fn(err, balance);
+    });
+}
+
+function getUsedAddresses(user){
+    var addresses = [];
+    var coin = process.env.NODE_ENV == 'production' ? 0 : 1;
+    for(var i = 0; i < user.wallet_count; i++){
+        var address = serverEnv.secret_key
+            .derive(util.format("m/44'/%d'/%d'/%d/%d", coin, user.user_account, 0, i))
+            .privateKey
+            .toAddress()
+            .toString();
+        addresses.push(address);
+    }
+    return addresses;
 }
 
 module.exports = {
