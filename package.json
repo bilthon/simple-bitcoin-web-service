@@ -16,6 +16,7 @@
     "express": "~4.12.4",
     "express-session": "1.11.3",
     "jade": "~1.9.2",
+    "lodash": "^3.10.1",
     "mongoose": "*",
     "morgan": "~1.5.3",
     "readline-sync": "^1.2.21",

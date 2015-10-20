@@ -62,4 +62,14 @@ router.post("/refresh_address", function(req, res){
     });
 });
 
+router.post("/send", function(req, res){
+    users.send(req.session.user, req.body.amount, req.body.destination_address, function(err, result){
+        console.log('err: '+err);
+        if(err)
+            res.render("welcome", err)
+        else
+            res.render("welcome", result);
+    });
+});
+
 module.exports = router;

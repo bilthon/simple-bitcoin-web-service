@@ -6,6 +6,7 @@ var serverEnv = require('./server-env');
 var Mnemonic = require('bitcore-mnemonic');
 var util = require('util');
 var Insight = require('bitcore-explorers').Insight;
+var lodash = require('lodash');
 
 /* If the environment variable NODE_ENV is 'production' we use the livenet, in case it is 'debug' we use the testnet */
 var network = process.env.NODE_ENV == 'production' ? bitcore.Networks.livenet : bitcore.Networks.testnet;
@@ -17,7 +18,8 @@ var UserSchema = new mongoose.Schema({
     salt: String,               // Salt for the hashed password
     hashed_password: String,    // Hashed password
     user_account: Number,       // The number of the user account 
-    wallet_count: Number        // The amount of wallets generated for this user
+    external_count: Number,     // The number of external wallets generated for this user
+    internal_count: Number      // The number of internal wallets generated for this user 
 });
 
 var User = connection.model('users', UserSchema);
@@ -33,18 +35,36 @@ function createUser(username, password, fn){
                 salt: salt,
                 hashed_password: hash,
                 user_account: count,     // Using the user count as the account number
-                wallet_count: 0
+                external_count: 0,
+                internal_count: 0
             }).save();
             promise.onResolve(function(err, user){
                 onUserSaved(err, user, fn);
-                incrementWalletCount(user);
+                incrementExternalWalletCount(user);
             });
         });
     });
 }
 
-function incrementWalletCount(user, fn){
-    User.update({username: user.username}, {wallet_count: user.wallet_count + 1}, {multi: false}, function(err, raw){
+function incrementInternalWalletCount(user, fn){
+    incrementWalletCount(user, false, fn);
+}
+
+function incrementExternalWalletCount(user, fn){
+    incrementWalletCount(user, true, fn);
+}
+
+/**
+* @param {object} User object from mongodb
+* @param {boolean} True if the wallet to be incremented is the external one, false otherwise
+* @param {function} Callback function with the following signature: function(error, raw_mongodb_response)
+*/
+function incrementWalletCount(user, external, fn){
+    if(external)
+        var updated = {external_count: user.external_count + 1};
+    else
+        var updated = {internal_count: user.internal_count + 1};
+    User.update({username: user.username}, updated, {multi: false}, function(err, raw){
         if(err) console.error(err);
         if(fn != undefined)
             fn(err, raw);
@@ -57,29 +77,61 @@ function onUserSaved(err, user, fn){
     /* User data object that will be used by the jade template engine to render stuff */
     var userData = {
         username: user.username,
-        address: createAddress(user)
+        address: getExternalAddress(user)
     };
     fn(err, userData);
 }
 
 /**
- * Creates a fresh wallet for a given user.
+ * Creates a fresh internal (or change) address for a given user.
  * @param {Object} User object retrieved from the collection
- * @param {Boolean} Whether to create an external (or internal) address
  * @return {String} A fresh new address
  */
-function createAddress(user, external){
-    var change = 0;
-    if(external != undefined && external == true)
-        change = 1;
+function getInternalAddress(user){
+    return createAddress(user, 1, user.internal_count);
+}
 
+/**
+ * Creates a fresh external address for a given user.
+ * @param {Object} User object retrieved from the collection
+ * @return {String} A fresh new address
+ */
+function getExternalAddress(user){
+    return createAddress(user, 0, user.external_count);
+}
+
+function createAddress(user, change, index){
     var coin = process.env.NODE_ENV == 'production' ? 0 : 1;
-    var address = serverEnv.secret_key
-        .derive(util.format("m/44'/%d'/%d'/%d/%d", coin, user.user_account, change, user.wallet_count))
-        .privateKey
+    var address = getPrivateKey(user, change, index)
         .toAddress()
         .toString();
     return address;
+}
+
+function getPrivateKey(user, change, index){
+    var coin = process.env.NODE_ENV == 'production' ? 0 : 1;
+    var privateKey = serverEnv.secret_key
+        .derive(util.format("m/44'/%d'/%d'/%d/%d", coin, user.user_account, change, index))
+        .privateKey;
+    return privateKey;
+}
+
+function getPrivateKeys(user, utxos){
+    var privateKeys = [];
+    for(var i in utxos){
+        var limits = [user.external_count, user.internal_count];
+        for(j = 0; j < limits.length; j++){
+            for(var k = 0; k < limits[j]; k++){
+                var pk = getPrivateKey(user, j, k);
+                if(pk.toAddress().toString() == utxos[i]['address']){
+                    console.log('found one match! comparing: '+pk.toAddress().toString()+' matches with '+utxos[i]['address']+', j: '+j+', k: '+k);
+                    privateKeys.push(pk);
+                }
+            }
+        }
+    }
+    console.log('found '+privateKeys.length+' private keys for '+utxos.length+' utxos');
+    return privateKeys;
 }
 
 /**
@@ -102,10 +154,11 @@ function authenticate(name, password, fn) {
                 calculateBalance(user, function(err, balance){
                     var userData = {
                         username: user.username, 
-                        address: createAddress(user),
-                        balance: balance
+                        address: getExternalAddress(user),
+                        balance: String(balance)
                     };
-                    if( hash == user.hashed_password)
+                    console.log('sending user data: '+JSON.stringify(userData));
+                    if(hash == user.hashed_password)
                         fn(null, userData)
                     else
                         fn(new Error('invalid password'));
@@ -144,13 +197,13 @@ function refreshAddress(user, fn){
     User.findOne({
         username: user.username
     }, function(err, user){
-        incrementWalletCount(user, function(err, raw){
+        incrementExternalWalletCount(user, function(err, raw){
             if(err) return fn(err);
 
             calculateBalance(user, function(err, balance){
                 var userData = {
                     username: user.username, 
-                    address: createAddress(user),
+                    address: getExternalAddress(user),
                     balance: String(balance)
                 };
                 fn(err, userData);
@@ -159,31 +212,116 @@ function refreshAddress(user, fn){
     });
 }
 
-function calculateBalance(user, fn){
+/**
+* Asyncronous call to retrieve all unspent transaction outputs
+* @param {string} user object
+* @param {function} callback
+*/
+function getUtxos(user, fn){
     var addresses = getUsedAddresses(user);
     var insight = new Insight(network);
-    insight.getUnspentUtxos(addresses, function(err, utxos){
-        var balance = 0;
-        for(var i in utxos){
-            if(utxos[i].toObject()['amount'] != undefined)
-                balance += utxos[i].toObject()['amount'];
+    insight.getUnspentUtxos(addresses, fn);    
+}
+
+/**
+* Function that will return an array of unspent transaction outputs that have to be combined
+* in order to satisfy a given required amount.
+* @param {array} Array of UnspentUtxos objects
+* @param {number} The target amount
+* @return {array} An array containing the unspent transaction outputs to be used. Or an empty
+* array if there are not enough funds to satisfy the given target.
+*/
+function getSpendableUtxos(utxos, targetAmount){
+    var utxosObj = lodash.invoke(utxos, 'toObject');
+    var spendableUtxos = [];
+    var i = 0;
+    console.log('sum of all utxos: '+utxosObj);
+    while(lodash.sum(spendableUtxos, 'amount') < targetAmount && i < utxos.length){
+        spendableUtxos.push(utxosObj[i]);
+        i++;
+    }
+    console.log('sum of all necessary utxos: '+lodash.sum( spendableUtxos, 'amount' ));
+    if(lodash.sum(spendableUtxos, 'amount') < targetAmount)
+        return [];
+    else
+        return spendableUtxos;
+}
+
+function addBalance(utxos){
+    var balance = 0;
+    for(var i in utxos){
+        if(utxos[i].toObject()['amount'] != undefined){
+            balance += utxos[i].toObject()['amount'];            
         }
-        fn(err, balance);
+    }
+    return balance;
+}
+
+function calculateBalance(user, fn){
+    getUtxos(user, function(err, utxos){
+        var balance = addBalance(utxos);
+        fn(err, balance);        
     });
 }
 
+/**
+* Returns all used addresses, both internal and external.
+*/
 function getUsedAddresses(user){
     var addresses = [];
     var coin = process.env.NODE_ENV == 'production' ? 0 : 1;
-    for(var i = 0; i < user.wallet_count; i++){
-        var address = serverEnv.secret_key
-            .derive(util.format("m/44'/%d'/%d'/%d/%d", coin, user.user_account, 0, i))
-            .privateKey
-            .toAddress()
-            .toString();
-        addresses.push(address);
+    var limits = [user.external_count, user.internal_count];
+    for(i = 0; i < limits.length; i++){
+        for(var j = 0; j < limits[i]; j++){
+            var address = getPrivateKey(user, i, j)
+                .toAddress()
+                .toString();
+            console.log('got user address: '+address+', j: '+i+', k: '+j);
+            addresses.push(address);
+        }
     }
     return addresses;
+}
+
+function send(user, amount, address, fn){
+    User.findOne({
+        username: user.username
+    }, function(err, user){
+        getUtxos(user, function(err, utxos){
+            var balance = addBalance(utxos);
+            var insight = new Insight(network);
+            var spendableUtxos = getSpendableUtxos(utxos, amount);
+            if(spendableUtxos.length == 0){
+                console.error('Insuficcient funds to make this transaction');
+                return fn(new Error('Insuficcient funds to make this transaction'));
+            }
+            var keys = getPrivateKeys(user, spendableUtxos);
+            console.log('got spendable keys: '+keys);
+            console.log('creating a transaction to '+address+' for this amount of satoshis: '+bitcore.Unit.fromBTC(amount).toSatoshis());
+            var transaction = new bitcore.Transaction()
+                .from(spendableUtxos)
+                .to(address, bitcore.Unit.fromBTC(amount).toSatoshis())
+                .change(getInternalAddress(user))
+                .sign(keys)
+            insight.broadcast(transaction, function(err, returnedTxId){
+                console.log('transaction broadcasted. err: '+err+', returnedTxId: '+returnedTxId);
+                if(err) return(err, userData);
+                incrementInternalWalletCount(user, function(err, raw){
+                    // fn(err, userData);
+
+                    calculateBalance(user, function(err, balance){
+                        var userData = {
+                            username: user.username, 
+                            address: getExternalAddress(user),
+                            balance: String(balance)
+                        };
+                        fn(err, userData);
+                    });
+
+                })
+            })
+        });
+    });
 }
 
 module.exports = {
@@ -191,7 +329,8 @@ module.exports = {
     authenticate: authenticate,
     requiredAuthentication: requiredAuthentication,
     userExist: userExist,
-    User: User,
+//    User: User,
     connection: connection,
-    refreshAddress: refreshAddress
+    refreshAddress: refreshAddress,
+    send: send
 }
