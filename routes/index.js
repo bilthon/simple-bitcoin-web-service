@@ -4,7 +4,7 @@ var router = express.Router();
 /* GET home page. */
 router.get("/", function (req, res) {
     if (req.session.user) {
-        res.render("welcome", {username: req.session.user.username, address: req.session.user.address});
+        res.render("welcome", req.session.user);
     } else {
         res.render("welcome")
     }

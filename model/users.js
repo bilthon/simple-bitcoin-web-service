@@ -124,7 +124,6 @@ function getPrivateKeys(user, utxos){
             for(var k = 0; k < limits[j]; k++){
                 var pk = getPrivateKey(user, j, k);
                 if(pk.toAddress().toString() == utxos[i]['address']){
-                    console.log('found one match! comparing: '+pk.toAddress().toString()+' matches with '+utxos[i]['address']+', j: '+j+', k: '+k);
                     privateKeys.push(pk);
                 }
             }
@@ -247,6 +246,12 @@ function getSpendableUtxos(utxos, targetAmount){
         return spendableUtxos;
 }
 
+/**
+* Function that given an array of unspent transaction output objects will add
+* all of their values.
+* @param {array} Unspent transaction output objects
+* @return {number} The total balance associated with the user, in BTC.
+*/
 function addBalance(utxos){
     var balance = 0;
     for(var i in utxos){
@@ -257,15 +262,33 @@ function addBalance(utxos){
     return balance;
 }
 
+/**
+* Function that will find all unspent transaction outputs related to a user and 
+* return the balance associated with that user.
+* @param {string|object} Either a string containing the user name or the user object retrieved from the database.
+* @param {function} Callback function with the signature: `function(err, balance)`
+*/
 function calculateBalance(user, fn){
-    getUtxos(user, function(err, utxos){
+
+    /* Handler to be used after the unspent transaction outputs are refrieved */
+    var utxosHandler = function(err, utxos){
         var balance = addBalance(utxos);
-        fn(err, balance);        
-    });
+        console.log('balance: '+balance);
+        fn(err, balance);
+    }
+
+    if(typeof(user) == 'string'){
+        User.findOne({username: user}, function(err, user){
+            getUtxos(user, utxosHandler);
+        });
+    }else{
+        getUtxos(user, utxosHandler)
+    }
 }
 
 /**
 * Returns all used addresses, both internal and external.
+* @param {object} User object retrieved from the database.
 */
 function getUsedAddresses(user){
     var addresses = [];
@@ -276,13 +299,20 @@ function getUsedAddresses(user){
             var address = getPrivateKey(user, i, j)
                 .toAddress()
                 .toString();
-            console.log('got user address: '+address+', j: '+i+', k: '+j);
             addresses.push(address);
         }
     }
     return addresses;
 }
 
+/**
+* Send funds to another user.
+* @param {object} User object saved in the session
+* @param {number} Amount in BTC to be sent
+* @param {string} Destination address
+* @param {function} Callback with the following signature `function(err, userData)`. 
+* Where userData is the user object kept in the session.
+*/
 function send(user, amount, address, fn){
     User.findOne({
         username: user.username
@@ -296,28 +326,22 @@ function send(user, amount, address, fn){
                 return fn(new Error('Insuficcient funds to make this transaction'));
             }
             var keys = getPrivateKeys(user, spendableUtxos);
-            console.log('got spendable keys: '+keys);
-            console.log('creating a transaction to '+address+' for this amount of satoshis: '+bitcore.Unit.fromBTC(amount).toSatoshis());
             var transaction = new bitcore.Transaction()
                 .from(spendableUtxos)
                 .to(address, bitcore.Unit.fromBTC(amount).toSatoshis())
                 .change(getInternalAddress(user))
-                .sign(keys)
+                .sign(keys);
+
             insight.broadcast(transaction, function(err, returnedTxId){
                 console.log('transaction broadcasted. err: '+err+', returnedTxId: '+returnedTxId);
                 if(err) return(err, userData);
                 incrementInternalWalletCount(user, function(err, raw){
-                    // fn(err, userData);
-
-                    calculateBalance(user, function(err, balance){
-                        var userData = {
-                            username: user.username, 
-                            address: getExternalAddress(user),
-                            balance: String(balance)
-                        };
-                        fn(err, userData);
-                    });
-
+                    var userData = {
+                        username: user.username, 
+                        address: getExternalAddress(user),
+                        balance: String(balance - amount)
+                    };                    
+                    fn(err, userData);
                 })
             })
         });
@@ -329,8 +353,8 @@ module.exports = {
     authenticate: authenticate,
     requiredAuthentication: requiredAuthentication,
     userExist: userExist,
-//    User: User,
     connection: connection,
     refreshAddress: refreshAddress,
-    send: send
+    send: send,
+    calculateBalance: calculateBalance
 }
