@@ -1,3 +1,2 @@
-# bitcoin-web-service
-
-Simple bitcoin web service
+# simple-bitcoin-web-service
+Simple generic bitcoin web service.
