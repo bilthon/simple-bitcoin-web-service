@@ -1,0 +1,37 @@
+{
+  "name": "simple-bitcoin-web-service",
+  "homepage": "https://github.com/bilthon/simple-bitcoin-web-service",
+  "authors": [
+    "Nelson R. Perez <bilthon@gmail.com>"
+  ],
+  "description": "Basic bitcoin web wallet service",
+  "main": "",
+  "moduleType": [],
+  "keywords": [
+    "bitcoin-wallet"
+  ],
+  "license": "MIT",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "install": {
+    "path": {
+      "css": "public/css",
+      "js": "public/js"
+    },
+    "sources": {
+      "bootstrap": [
+        "bower_components/bootstrap/dist/css/bootstrap-theme.min.css",
+        "bower_components/bootstrap/dist/css/bootstrap.min.css"
+      ]
+    }
+  },
+  "dependencies": {
+    "bootstrap": "~3.3.5"
+  }
+}

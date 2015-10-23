@@ -4,12 +4,17 @@ block content
     h1= title
     if error
         p Error: #{error}
-    form(id="login", method="POST", action="/user/login")
-        div
-            lable(for='username') User Name
-            input(type='text', name='username')
-        div
-            lable(for='password') Password
-            input(type='password', name='password')
-        div
-            input(type="submit", value="Log In")
+    - var label_classes = ['col-md-4', 'control-label']
+    div(class="col-md-6 col-md-offset-3 container")
+        form.form-horizontal(id="login", method="POST", action="/user/login")
+            div.form-group
+                label(class=label_classes, for='username') User Name
+                div(class="col-sm-4")
+                    input(class="form-control", type='text', name='username')
+            div.form-group
+                label(class=label_classes, for='password') Password
+                div(class="col-sm-4")
+                    input(class="form-control", type='password', name='password')
+            div.form-group
+                div(class="col-sm-offset-4 col-sm-10")
+                    input(class='btn btn-primary', type="submit", value="Log In")

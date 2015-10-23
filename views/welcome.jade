@@ -6,35 +6,48 @@ block content
             | var user = '#{username}';
         div( style='text-align:right')
             a(href='/user/logout') Logout
-        p Welcome #{username}
+        p.h2(class='center') Welcome #{username}
         br
         br
         if address
-            h3 Receive
-            div
-                p Address: #{address}
-            div
-                p Balance: #{balance}
-            div
-                form(name='refresh_address', action='/user/refresh_address', method='post')
-                    input(type='hidden', name='username', value='#{username}')
-                    input(type='submit', value='Refresh address')
+            div.col-md-8
+                h3 Receive
+                div.container
+                    div
+                        p 
+                            strong Address: 
+                            normal #{address}
+                    div
+                        p 
+                            strong Balance: 
+                            normal #{balance}
+                    div
+                        form(name='refresh_address', action='/user/refresh_address', method='post')
+                            input(type='hidden', name='username', value='#{username}')
+                            input(type='submit', value='Refresh address')
 
-        if balance > 0 && address
-            h3 Send
-            form(name='send', action='/user/send', method='post')
-                div
-                    label(for='amount') Amount
-                    input#amount(type='text', name='amount')
-                div
-                    label(for='destination_address') Address
-                    input#destination_address(type='text', name='destination_address')
-                div
-                input(type='submit', value='Send')
+                if balance > 0 && address
+                    h3 Send
+                    div.container
+                        form(class="form-horizontal", name='send', action='/user/send', method='post')
+                            div(class="form-group")
+                                label(class="col-sm-1 control-label", for='amount') Amount
+                                div(class="col-sm-4")
+                                    input#amount(class="form-control", type='text', name='amount')
+                            div(class="form-group")
+                                label(class="col-sm-1 control-label", for='destination_address') Address
+                                div(class="col-sm-4")
+                                    input#destination_address(class="form-control", type='text', name='destination_address')
+                            div
+                            input(class="btn btn-default", type='submit', value='Send')
 
     else
-        p No user
-        p
-            a(href='/user/login') Login
-        p
-            a(href='/user/signup') Signup
+        div.center
+            p
+                h2 Welcome
+            p
+                h4
+                    a(href='/user/login') Login
+            p
+                h4
+                    a(href='/user/signup') Signup

@@ -16,13 +16,22 @@ router.post("/login", function (req, res) {
         if (!err) {
             req.session.regenerate(function () {
                 req.session.user = user;
-                res.render("welcome", user);
+                res.redirect("/user/welcome");
             });
         } else {
             console.error('error: '+err);
             res.render("login", { error: 'Authentication failed, please check your  username and password.'} );
         }
     });
+});
+
+router.get("/welcome", function(req, res){
+    console.log('session: '+JSON.stringify(req.session));
+    if(req.session){
+        res.render("welcome", req.session.user);
+    } else {
+        req.redirect("/");        
+    }
 });
 
 router.get("/signup", function (req, res) {
@@ -40,7 +49,8 @@ router.post("/signup", users.userExist, function (req, res) {
         if(!err){
             req.session.regenerate(function(){
                 req.session.user = user;
-                res.render("welcome", user);
+                // res.render("welcome", user);
+                res.redirect("/user/welcome", user);
             });
         }
     });
@@ -57,18 +67,23 @@ router.post("/refresh_address", function(req, res){
         // if(err) TODO: render error page 
         req.session.regenerate(function () {
             req.session.user = user;
-            res.render("welcome", user);
+            // res.render("welcome", user);
+            res.redirect("/user/welcome");
         });
     });
 });
 
 router.post("/send", function(req, res){
     users.send(req.session.user, req.body.amount, req.body.destination_address, function(err, result){
-        console.log('err: '+err);
-        if(err)
-            res.render("welcome", err)
-        else
-            res.render("welcome", result);
+        console.log('err: '+err+', result: '+JSON.stringify(result));
+        if(!err){
+            req.session.regenerate(function(){
+                req.session.user = result;
+                res.redirect("/user/welcome");
+            });
+        }else{
+            res.redirect("/user/welcome");            
+        }
     });
 });
 

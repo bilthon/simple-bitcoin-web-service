@@ -92,11 +92,17 @@ function getInternalAddress(user){
 }
 
 /**
- * Creates a fresh external address for a given user.
- * @param {Object} User object retrieved from the collection
- * @return {String} A fresh new address
+ * Gets the latest created external address for a given user.
+ * @param {object|string} Either a user object retrieved from the collection or a user name
+ * @return {string} A fresh new address
  */
-function getExternalAddress(user){
+function getExternalAddress(arg){
+    if ( typeof(arg) == 'string' ){
+        User.findOne({username: arg}, function(err, user){
+            return createAddress(user, 0, user.external_count);
+        });
+    }
+    var user = arg;
     return createAddress(user, 0, user.external_count);
 }
 
@@ -168,6 +174,18 @@ function authenticate(name, password, fn) {
         }
     });
 
+}
+
+function welcome(username, fn){
+    calculateBalance(username, function(err, balance){
+        if (err) return fn(err);
+        var userData = {
+            username: username, 
+            address: getExternalAddress(user),
+            balance: String(balance)
+        };
+        fn(null, userData);
+    });
 }
 
 function requiredAuthentication(req, res, next) {
@@ -356,5 +374,6 @@ module.exports = {
     connection: connection,
     refreshAddress: refreshAddress,
     send: send,
-    calculateBalance: calculateBalance
+    calculateBalance: calculateBalance,
+    welcome: welcome
 }
