@@ -49,8 +49,7 @@ router.post("/signup", users.userExist, function (req, res) {
         if(!err){
             req.session.regenerate(function(){
                 req.session.user = user;
-                // res.render("welcome", user);
-                res.redirect("/user/welcome", user);
+                res.redirect("/user/welcome");
             });
         }
     });
