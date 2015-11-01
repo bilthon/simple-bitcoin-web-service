@@ -38,9 +38,18 @@ function createUser(username, password, fn){
                 external_count: 0,
                 internal_count: 0
             }).save();
+            
             promise.onResolve(function(err, user){
-                onUserSaved(err, user, fn);
+                if(err) return fn(new Error('Error saving user'));
+
+                /* User data object that will be used by the jade template engine to render stuff */
+                var userData = {
+                    username: user.username,
+                    address: getExternalAddress(user),
+                    balance: 0
+                };
                 incrementExternalWalletCount(user);
+                fn(err, userData);
             });
         });
     });
@@ -69,17 +78,6 @@ function incrementWalletCount(user, external, fn){
         if(fn != undefined)
             fn(err, raw);
     });
-}
-
-function onUserSaved(err, user, fn){
-    if(err) return fn(new Error('Error saving user'));
-
-    /* User data object that will be used by the jade template engine to render stuff */
-    var userData = {
-        username: user.username,
-        address: getExternalAddress(user)
-    };
-    fn(err, userData);
 }
 
 /**
