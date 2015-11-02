@@ -24,3 +24,4 @@ You should be asked whether you want the *testnet* or *livenet* **(use at your o
 
 After that you're all set. If you go to [http://localhost:3000](http://localhost:3000) you'll be presented with a very simple "login" or "signup" view.
 
+![Landing page](/public/images/screenshot.png "Front page")
