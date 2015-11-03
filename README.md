@@ -24,11 +24,6 @@ You should be asked whether you want the *testnet* or *livenet* **(use at your o
 
 After that you're all set. If you go to [http://localhost:3000](http://localhost:3000) you'll be presented with a very simple "login" or "signup" view.
 
-![Landing page](/public/images/landing_page.png "Front page")
-This is the first landing page, with the option of creating a new account or signing in an existing one.
-
-![Login](/public/images/login.png "Login")
-Login view
 
 ![Welcome](/public/images/welcome.png "Welcome page")
 Welcome page, displaying your current balance and with the option to send coins to another address.
