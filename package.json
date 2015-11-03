@@ -23,6 +23,7 @@
     "mongoose": "*",
     "morgan": "~1.5.3",
     "readline-sync": "^1.2.21",
-    "serve-favicon": "~2.2.1"
+    "serve-favicon": "~2.2.1",
+    "sprintf-js": "^1.0.3"
   }
 }

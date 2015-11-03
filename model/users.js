@@ -7,6 +7,7 @@ var Mnemonic = require('bitcore-mnemonic');
 var util = require('util');
 var Insight = require('bitcore-explorers').Insight;
 var lodash = require('lodash');
+var sprintf = require("sprintf-js").sprintf;
 
 /* If the environment variable NODE_ENV is 'production' we use the livenet, in case it is 'debug' we use the testnet */
 var network = process.env.NODE_ENV == 'production' ? bitcore.Networks.livenet : bitcore.Networks.testnet;
@@ -46,7 +47,7 @@ function createUser(username, password, fn){
                 var userData = {
                     username: user.username,
                     address: getExternalAddress(user),
-                    balance: 0
+                    balance: sprintf('%.8f', 0)
                 };
                 incrementExternalWalletCount(user);
                 fn(err, userData);
@@ -158,7 +159,7 @@ function authenticate(name, password, fn) {
                     var userData = {
                         username: user.username, 
                         address: getExternalAddress(user),
-                        balance: String(balance)
+                        balance: sprintf('%.8f', balance)
                     };
                     console.log('sending user data: '+JSON.stringify(userData));
                     if(hash == user.hashed_password)
@@ -180,7 +181,7 @@ function welcome(username, fn){
         var userData = {
             username: username, 
             address: getExternalAddress(user),
-            balance: String(balance)
+            balance: sprintf('%.8f', balance)
         };
         fn(null, userData);
     });
@@ -219,7 +220,7 @@ function refreshAddress(user, fn){
                 var userData = {
                     username: user.username, 
                     address: getExternalAddress(user),
-                    balance: String(balance)
+                    balance: sprintf('%.8f', balance)
                 };
                 fn(err, userData);
             });
@@ -355,7 +356,7 @@ function send(user, amount, address, fn){
                     var userData = {
                         username: user.username, 
                         address: getExternalAddress(user),
-                        balance: String(balance - amount)
+                        balance: sprintf('%.8f', balance - amount)
                     };                    
                     fn(err, userData);
                 })
